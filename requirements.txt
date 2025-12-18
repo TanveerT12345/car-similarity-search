@@ -1,0 +1,9 @@
+torch
+torchvision
+pytorch-metric-learning
+faiss-cpu
+scipy
+numpy
+pillow
+tqdm
+streamlit

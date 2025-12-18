@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/
+
+# Data + artifacts (DO NOT COMMIT)
+data/
+checkpoints/
+indexes/
+outputs/
+*.pt
+*.pth
+*.ckpt
+*.npy
+*.npz
+*.pkl
+
+# Kaggle cache / downloads
+.cache/
+kagglehub/
