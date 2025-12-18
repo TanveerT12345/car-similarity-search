@@ -11,7 +11,7 @@ def main(use_unlabeled_test_for_gallery: bool = True):
     os.makedirs("indexes", exist_ok=True)
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    ckpt = torch.load("checkpoints/best.pt", map_location=device)
+    ckpt = torch.load("checkpoints/best.pt", map_location=device, weights_only=True)
     model = EmbeddingNet(embed_dim=512).to(device)
     model.load_state_dict(ckpt["model"])
     model.eval()
@@ -42,4 +42,4 @@ def main(use_unlabeled_test_for_gallery: bool = True):
     print("Gallery size:", len(metas), "dim:", d)
 
 if __name__ == "__main__":
-    main(use_unlabeled_test_for_gallery=True)
+    main(use_unlabeled_test_for_gallery=False)

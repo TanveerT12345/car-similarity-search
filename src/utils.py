@@ -1,29 +1,47 @@
+# src/utils.py
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-def embed_dataset(model, dataset, batch_size=128, num_workers=2, device="cpu"):
-    loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
-    embs = []
-    metas = []
 
+def _collate_keep_meta(batch):
+    """
+    batch is a list of (img_tensor, label_int, meta_dict).
+    We stack images/labels, but keep meta as a Python list so dict keys don't have to match.
+    """
+    imgs, labels, metas = zip(*batch)
+    imgs = torch.stack(imgs, dim=0)
+    labels = torch.tensor(labels, dtype=torch.long)
+    return imgs, labels, list(metas)
+
+
+@torch.no_grad()
+def embed_dataset(model, dataset, batch_size=128, device="cuda"):
     model.eval()
-    with torch.no_grad():
-        for imgs, labels, meta in tqdm(loader, desc="Embedding"):
-            imgs = imgs.to(device)
-            z = model(imgs).detach().cpu().numpy().astype("float32")
-            embs.append(z)
 
-            if isinstance(meta, dict):
-                bs = len(labels)
-                for i in range(bs):
-                    item = {k: meta[k][i] for k in meta}
-                    item["label"] = int(labels[i])
-                    metas.append(item)
-            else:
-                for i in range(len(labels)):
-                    metas.append({"label": int(labels[i])})
+    loader = DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=0,                 # Windows stability + avoids worker collate issues
+        pin_memory=(device == "cuda"),
+        collate_fn=_collate_keep_meta, # <-- key fix
+    )
 
-    embs = np.concatenate(embs, axis=0)
-    return embs, metas
+    all_embs = []
+    all_metas = []
+
+    for imgs, labels, metas in tqdm(loader, desc="Embedding"):
+        imgs = imgs.to(device, non_blocking=True)
+        emb = model(imgs)
+
+        # Normalize for cosine similarity retrieval
+        emb = torch.nn.functional.normalize(emb, p=2, dim=1)
+
+        all_embs.append(emb.detach().cpu().numpy())
+        all_metas.extend(metas)
+
+    embs = np.concatenate(all_embs, axis=0)
+    return embs.astype("float32"), all_metas
+
