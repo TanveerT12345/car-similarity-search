@@ -4,13 +4,22 @@ Given a car photo, this project returns the **top-K most visually similar cars**
 - a **metric learning embedding model** (ResNet-based)
 - **FAISS** nearest-neighbor search over embedded images
 
-**Scripts:**
-- `train_embedding.py` – train + save `checkpoints/best.pt`
-- `build_index.py` – build FAISS index + save `indexes/faiss.index` and `indexes/meta.json`
-- `search.py` – CLI retrieval
-- `app.py` – Streamlit demo
+## File Guide (What each file does)
 
----
+**Top-level scripts**
+- `train_embedding.py` — trains the metric learning model (Triplet Loss) on a train/val split, prints Recall@K + mAP@K each epoch, and saves the best checkpoint to `checkpoints/best.pt`.
+- `build_index.py` — embeds a “gallery” dataset (usually the labeled validation set), builds a FAISS index for nearest-neighbor search, and saves:
+  - `indexes/faiss.index` (vectors)
+  - `indexes/meta.json` (paths + labels + optional class names)
+- `search.py` — command-line query tool: loads `best.pt` + FAISS index, embeds a query image, retrieves top-K matches, and prints results with similarity scores.
+- `app.py` — Streamlit UI: upload an image → embeds it → FAISS search → shows results in a grid; caches model/index for fast interaction.
+
+**Core library code (`src/`)**
+- `src/model.py` — defines `EmbeddingNet` (pretrained ResNet50 backbone + linear projection head) and outputs L2-normalized embeddings for cosine-style similarity.
+- `src/datasets.py` — Stanford Cars loader (Kaggle + devkit `.mat`): handles nested folders, reads bounding boxes + labels when available, and creates a labeled train/val split (since some test annotations are unlabeled).
+- `src/utils.py` — embedding pipeline utilities: batches inference over a dataset and returns `(embeddings, metadata)`; includes a custom `collate_fn` to avoid DataLoader errors when metadata keys differ.
+- `src/metrics.py` — retrieval evaluation: computes similarity matrix from embeddings and reports Recall@K and mAP@K.
+
 
 ## Setup (Windows PowerShell)
 

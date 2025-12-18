@@ -6,10 +6,8 @@ from tqdm import tqdm
 
 
 def _collate_keep_meta(batch):
-    """
-    batch is a list of (img_tensor, label_int, meta_dict).
-    We stack images/labels, but keep meta as a Python list so dict keys don't have to match.
-    """
+    # DataLoader normally tries to "stack" dicts by matching keys.
+    # Our meta dicts can differ (some samples may not have class_name), so we keep metas as a list.
     imgs, labels, metas = zip(*batch)
     imgs = torch.stack(imgs, dim=0)
     labels = torch.tensor(labels, dtype=torch.long)
@@ -18,15 +16,18 @@ def _collate_keep_meta(batch):
 
 @torch.no_grad()
 def embed_dataset(model, dataset, batch_size=128, device="cuda"):
+    # Turns a dataset of images into:
+    # - an embedding matrix [N, D] for FAISS indexing/search
+    # - a parallel list of metadata (paths, labels, class names when available)
     model.eval()
 
     loader = DataLoader(
         dataset,
         batch_size=batch_size,
         shuffle=False,
-        num_workers=0,                 # Windows stability + avoids worker collate issues
+        num_workers=0,                 # stable on Windows; avoids multiprocessing + collate headaches
         pin_memory=(device == "cuda"),
-        collate_fn=_collate_keep_meta, # <-- key fix
+        collate_fn=_collate_keep_meta, # crucial: prevents KeyError from mismatched meta keys
     )
 
     all_embs = []
@@ -34,14 +35,15 @@ def embed_dataset(model, dataset, batch_size=128, device="cuda"):
 
     for imgs, labels, metas in tqdm(loader, desc="Embedding"):
         imgs = imgs.to(device, non_blocking=True)
+
+        # Forward pass: convert images -> embedding vectors
         emb = model(imgs)
 
-        # Normalize for cosine similarity retrieval
+        # L2-normalize so cosine similarity works consistently across indexing and querying
         emb = torch.nn.functional.normalize(emb, p=2, dim=1)
 
         all_embs.append(emb.detach().cpu().numpy())
         all_metas.extend(metas)
 
-    embs = np.concatenate(all_embs, axis=0)
-    return embs.astype("float32"), all_metas
-
+    embs = np.concatenate(all_embs, axis=0).astype("float32")
+    return embs, all_metas
